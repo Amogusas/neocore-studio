@@ -63,6 +63,7 @@
       --footer-bg: #080810;
       --card-shadow: rgba(0,0,0,0.4);
     }
+    [data-theme="dark"] html,
     [data-theme="dark"] body           { background: var(--bg); color: var(--text); }
     [data-theme="dark"] nav            { background: var(--nav-bg); border-color: var(--border); }
     [data-theme="dark"] .nav-links a   { color: var(--text); }
@@ -148,14 +149,26 @@
 
     html {
       scroll-behavior: smooth;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      width: 100%;
+      max-width: 100vw;
     }
 
     body {
       font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--light);
-      color: var(--dark);
+      background: var(--bg);
+      color: var(--text);
       line-height: 1.6;
       overflow-x: hidden;
+      width: 100%;
+      max-width: 100vw;
+      position: relative;
+    }
+
+    img, video, canvas, svg, iframe {
+      max-width: 100%;
     }
 
     h1, h2, h3, .logo {
@@ -801,6 +814,8 @@
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
     position: relative;
+    width: 100%;
+    max-width: 100%;
   }
   .marquee-track {
     display: inline-flex;
@@ -1861,8 +1876,8 @@
   #matrix-canvas {
     position: fixed;
     inset: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     z-index: 9998;
     pointer-events: none;
     display: none;
@@ -2816,7 +2831,7 @@
 
   @media (max-width: 860px) {
     nav {
-      padding: 12px 18px;
+      padding: 10px 16px;
     }
     .nav-links a:not(.btn) {
       display: none;
@@ -2824,10 +2839,51 @@
     .cmd-pill {
       display: none;
     }
+    .nav-links .btn-outline {
+      display: none !important;
+    }
     .nav-links .btn {
-      padding: 8px 14px;
-      font-size: 0.82rem;
+      padding: 7px 13px;
+      font-size: 0.8rem;
       margin-left: 0 !important;
+    }
+    .hero {
+      padding: 55px 16px 45px !important;
+    }
+    .features,
+    .contact,
+    .pricing,
+    .faq,
+    .compare-section,
+    .process,
+    .calculator,
+    .portfolio,
+    footer {
+      padding: 55px 16px !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      overflow-x: hidden;
+    }
+    .portfolio-grid,
+    .pricing-grid,
+    .cards,
+    .process-steps,
+    .contact-container,
+    .footer-grid {
+      grid-template-columns: 1fr !important;
+      gap: 20px !important;
+    }
+    .compare-container {
+      min-height: 380px;
+    }
+    .calc-card {
+      grid-template-columns: 1fr !important;
+      padding: 22px 14px !important;
+      margin-top: 28px !important;
+    }
+    .contact-info-card,
+    .contact-form-card {
+      padding: 22px 14px !important;
     }
     .hero-buttons {
       flex-direction: column;
@@ -2846,37 +2902,113 @@
   }
 
   @media (max-width: 600px) {
+    nav {
+      padding: 10px 12px;
+    }
+    .logo {
+      font-size: 1.1rem;
+      gap: 6px;
+    }
+    .logo img {
+      width: 28px !important;
+      height: 28px !important;
+    }
+    .nav-links .btn-primary {
+      padding: 6px 11px;
+      font-size: 0.78rem;
+      margin-left: 6px !important;
+    }
+    #sound-toggle {
+      width: 32px;
+      height: 32px;
+      margin-left: 6px !important;
+      padding: 0;
+    }
+    .features,
+    .contact,
+    .pricing,
+    .faq,
+    .compare-section,
+    .process,
+    .calculator,
+    .portfolio,
+    footer {
+      padding: 42px 12px !important;
+    }
     .brief-cards-grid,
     .brief-chips-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr !important;
     }
     .brief-modal {
-      padding: 22px 16px;
+      padding: 20px 12px;
+    }
+    .cookie-banner {
+      left: 10px !important;
+      right: 10px !important;
+      max-width: calc(100% - 20px) !important;
+      bottom: 10px !important;
+      padding: 12px 14px;
+    }
+    #toast-container {
+      left: 10px !important;
+      right: 10px !important;
+      top: 10px !important;
+      align-items: center;
+    }
+    .toast {
+      min-width: 0 !important;
+      width: 100% !important;
     }
     #theme-toggle {
-      bottom: 18px;
-      right: 18px;
-      width: 44px;
-      height: 44px;
+      bottom: 16px;
+      right: 16px;
+      width: 42px;
+      height: 42px;
     }
     #back-to-top {
-      bottom: 70px;
-      right: 18px;
-      width: 44px;
-      height: 44px;
+      bottom: 66px;
+      right: 16px;
+      width: 42px;
+      height: 42px;
     }
     #telegram-float {
-      bottom: 18px;
-      left: 18px;
-      width: 44px;
-      height: 44px;
+      bottom: 16px;
+      left: 16px;
+      width: 42px;
+      height: 42px;
     }
     .checkout-modal {
-      padding: 20px 14px;
+      padding: 18px 12px;
     }
     .checkout-payment-methods {
       flex-direction: column;
       gap: 6px;
+    }
+    .compare-container {
+      min-height: 350px;
+    }
+    .compare-panel {
+      padding: 16px 8px;
+    }
+    .compare-headline {
+      font-size: 1.1rem;
+    }
+    .compare-list {
+      font-size: 0.78rem;
+      gap: 6px;
+    }
+    .hero h1 {
+      font-size: 1.8rem;
+    }
+    .hero p {
+      font-size: 0.92rem;
+    }
+    .section-title {
+      font-size: 1.45rem;
+    }
+    .section-sub {
+      font-size: 0.9rem;
+      margin-bottom: 28px;
     }
   }
   </style>
@@ -2897,7 +3029,7 @@
     <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
   </a>
   <div id="toast-container"></div>
-  <canvas id="confetti-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:9990;"></canvas>
+  <canvas id="confetti-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9990;"></canvas>
 
   <!-- MATRIX CANVAS & DEV TERMINAL HUD -->
   <canvas id="matrix-canvas"></canvas>
@@ -4858,7 +4990,7 @@
 
     const sparkles = [];
     const sparkCanvas = document.createElement('canvas');
-    sparkCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:9996;';
+    sparkCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9996;';
     document.body.appendChild(sparkCanvas);
     const sCtx = sparkCanvas.getContext('2d');
     function resizeSparks() {
