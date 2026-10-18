@@ -159,10 +159,12 @@ def update_lead_status(file_path: str, contact_email: str, new_status: str, sent
             return False
     return False
 
-def replenish_leads_from_finder(file_path: str = CSV_FILE_PATH, count_per_niche: int = 2) -> int:
+def replenish_leads_from_finder(file_path: str = CSV_FILE_PATH, count_per_niche: int = 2, count: int = None) -> int:
     """
     Вызывает модуль lead_finder для автоматического пополнения базы новых лидов по целевым нишам.
     """
+    if count is not None:
+        count_per_niche = count
     print(f"[AUTOLOAD] Запуск автоматического поиска новых контактов через lead_finder...")
     try:
         import lead_finder
