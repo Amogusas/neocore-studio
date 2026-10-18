@@ -1,0 +1,17 @@
+# Dependencies & Environment
+node_modules/
+.env
+.env.local
+*.log
+
+# Editor & System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Agent & AI scratch files
+.agents/
+.gemini/
+scratch/
