@@ -65,7 +65,7 @@ STUDIO_TELEGRAM = "https://t.me/neocore_studio"
 STUDIO_EMAIL = os.getenv("SMTP_USER", "stupapupa228777@gmail.com")
 
 # 4. Настройки работы с базой лидов
-CSV_FILE_PATH = "leads.csv"
+CSV_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "leads.csv")
 CSV_FIELDNAMES = ["name", "niche", "site", "contact_email", "status", "added_at", "sent_at"]
 DISPATCH_DELAY_SECONDS = 15
 AUTO_REPLENISH_LEADS = True  # Автоматический вызов lead_finder, если база пуста
@@ -159,16 +159,15 @@ def update_lead_status(file_path: str, contact_email: str, new_status: str, sent
             return False
     return False
 
-def replenish_leads_from_finder(file_path: str = CSV_FILE_PATH, count: int = 3) -> int:
+def replenish_leads_from_finder(file_path: str = CSV_FILE_PATH, count_per_niche: int = 2) -> int:
     """
-    Вызывает модуль lead_finder для автоматического пополнения базы новых лидов.
+    Вызывает модуль lead_finder для автоматического пополнения базы новых лидов по целевым нишам.
     """
     print(f"[AUTOLOAD] Запуск автоматического поиска новых контактов через lead_finder...")
     try:
         import lead_finder
-        added = lead_finder.find_and_save_leads(
-            niche="Детейлинг авто студия Москва",
-            target_count=count,
+        added = lead_finder.find_and_save_all_niches(
+            count_per_niche=count_per_niche,
             output_csv=file_path
         )
         return added
@@ -207,17 +206,24 @@ def generate_pitch(company_name: str, niche: str, current_site: str) -> str:
 """
 
     if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY_HERE":
-        try:
-            from google import genai
-            client = genai.Client(api_key=GEMINI_API_KEY)
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=prompt
-            )
-            if response and response.text:
-                return response.text.strip()
-        except Exception as e:
-            print(f"[WARN] Ошибка обращения к Gemini API ({e}). Применен резервный шаблон.")
+        models_to_try = [GEMINI_MODEL, "gemini-3.5-flash", "gemini-3.5-flash-lite"]
+        seen_models = []
+        for m in models_to_try:
+            if m and m not in seen_models:
+                seen_models.append(m)
+
+        for model_name in seen_models:
+            try:
+                from google import genai
+                client = genai.Client(api_key=GEMINI_API_KEY, http_options={"timeout": 10.0})
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                if response and response.text:
+                    return response.text.strip()
+            except Exception as e:
+                continue
 
     # Надежный высококонверсионный шаблон (Fallback)
     fallback_pitch = (

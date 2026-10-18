@@ -2,18 +2,19 @@
 # -*- coding: utf-8 -*-
 
 """
-NEOCORE STUDIO // Automated Lead Finder & Website Email Parser
-Модуль автоматического поиска компаний по заданной нише, парсинга их сайтов на наличие email-контактов
-и сохранения уникальных записей в leads.csv без дубликатов по домену или почте.
+NEOCORE STUDIO // Automated Multi-Niche Lead Discovery & Verification Engine
+Интеллектуальный модуль автоматического поиска компаний по всем коммерческим нишам,
+парсинга их официальных сайтов на контактные email и пополнения базы leads.csv без дубликатов.
 
 Установка зависимостей:
-    pip install requests beautifulsoup4
+    pip install google-genai requests beautifulsoup4
 """
 
 import os
 import re
 import sys
 import csv
+import json
 import time
 import base64
 import argparse
@@ -33,9 +34,30 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # ==============================================================================
-# КОНФИГУРАЦИЯ ПОИСКОВИКА И ПАРСЕРА
+# ЗАГРУЗКА ОКРУЖЕНИЯ И КОНФИГУРАЦИЯ
 # ==============================================================================
-CSV_FILE_PATH = "leads.csv"
+def _load_env_file():
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip("'\"")
+                        if k not in os.environ:
+                            os.environ[k] = v
+        except Exception:
+            pass
+
+_load_env_file()
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+
+CSV_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "leads.csv")
 CSV_FIELDNAMES = ["name", "niche", "site", "contact_email", "status", "added_at", "sent_at"]
 
 DEFAULT_HEADERS = {
@@ -44,19 +66,182 @@ DEFAULT_HEADERS = {
     "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
 }
 
-# Регулярное выражение для поиска email-адресов
 EMAIL_REGEX = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
 
-# Пресеты целевых ниш для автопополнения базы
-DEFAULT_TARGET_NICHES = [
-    "Детейлинг авто студия Москва",
+# ==============================================================================
+# ПОЛНЫЙ КАТАЛОГ ВЫСОКОДОХОДНЫХ КОММЕРЧЕСКИХ НИШ
+# ==============================================================================
+COMMERCIAL_NICHES_CATALOG = [
+    # 1. Автобизнес и премиальный детейлинг
+    "Детейлинг студия премиум Москва",
+    "Оклейка авто бронепленкой Москва",
+    "Тюнинг ателье премиум Москва",
+
+    # 2. Недвижимость, элитный ремонт и архитектура
     "Дизайнерский ремонт квартир Москва",
-    "Ландшафтный дизайн студия Москва",
-    "Архитектурное бюро Москва",
-    "Премиальная стоматология Москва"
+    "Студия дизайна интерьера Москва",
+    "Архитектурное бюро проектирование Москва",
+    "Ландшафтный дизайн загородных участков Москва",
+    "Строительство загородных коттеджей Москва",
+
+    # 3. Премиальная медицина и эстетика
+    "Премиальная стоматология виниры Москва",
+    "Клиника эстетической медицины косметология Москва",
+    "Центр лазерной коррекции зрения Москва",
+
+    # 4. Премиальные заказные товары и производство
+    "Дизайнерская мебель на заказ Москва",
+    "Интернет-магазин оригинальных наручных часов Москва",
+    "Студия элитного освещения Москва",
+
+    # 5. B2B консалтинг, право и логистика
+    "Юридическая компания для бизнеса Москва",
+    "Аудиторская компания консалтинг Москва",
+    "Таможенное оформление логистика ВЭД Москва",
+
+    # 6. Мероприятия и сфера гостеприимства
+    "Event агентство организация мероприятий Москва",
+    "Премиальный кейтеринг банкеты Москва"
 ]
 
-# Черный список агрегаторов, СМИ, маркетплейсов и информационных порталов
+# Проверенные каталоги компаний для каждой ниши (резервный источник высокой надежности)
+SEED_CATALOG_COMPANIES = {
+    "Детейлинг студия премиум Москва": [
+        {"name": "Brooklands Detailing", "site": "brooklands.ru"},
+        {"name": "Advance Star", "site": "advancestar.ru"},
+        {"name": "Brothers Style", "site": "brothers-style.ru"},
+        {"name": "Detailer", "site": "detailer.ru"},
+        {"name": "Fast and Shine", "site": "fastnshine.ru"}
+    ],
+    "Оклейка авто бронепленкой Москва": [
+        {"name": "Autosecurity", "site": "autosecurity.ru"},
+        {"name": "Car-Stile", "site": "car-stile.ru"},
+        {"name": "VinylRussia", "site": "vinylrussia.ru"},
+        {"name": "Wrap Team", "site": "wrapteam.ru"},
+        {"name": "PTM Studio", "site": "ptmstudio.ru"}
+    ],
+    "Тюнинг ателье премиум Москва": [
+        {"name": "Morendi", "site": "morendi.ru"},
+        {"name": "Seven Force", "site": "sevenforce.ru"},
+        {"name": "Level Performance", "site": "level-p.ru"},
+        {"name": "Gosha Turbo Tech", "site": "goshapb.ru"},
+        {"name": "K8 Strasse", "site": "k8-strasse.com"}
+    ],
+    "Дизайнерский ремонт квартир Москва": [
+        {"name": "СВ-Сервис", "site": "svservice.ru"},
+        {"name": "Domeo", "site": "domeo.ru"},
+        {"name": "Авальремонт", "site": "avalremont.ru"},
+        {"name": "Фундамент", "site": "remont-f.ru"},
+        {"name": "Вира-АртСтрой", "site": "eremont.ru"}
+    ],
+    "Студия дизайна интерьера Москва": [
+        {"name": "Geometrix Design", "site": "geometrix.ru"},
+        {"name": "Studia 54", "site": "studia-54.ru"},
+        {"name": "Chado", "site": "chado.pro"},
+        {"name": "Buro 108", "site": "buro108.ru"},
+        {"name": "Artlebedev", "site": "artlebedev.ru"}
+    ],
+    "Архитектурное бюро проектирование Москва": [
+        {"name": "Архитектурное бюро SPEECH", "site": "speech.su"},
+        {"name": "Wowhaus", "site": "wowhaus.ru"},
+        {"name": "Цимайло Ляшенко и Партнеры", "site": "tlp-architects.ru"},
+        {"name": "Атриум", "site": "atrium.ru"},
+        {"name": "Сергей Скуратов Architects", "site": "skuratov-arch.ru"}
+    ],
+    "Ландшафтный дизайн загородных участков Москва": [
+        {"name": "Imperial Garden", "site": "imperialgarden.ru"},
+        {"name": "Илья Мочалов и Партнеры", "site": "mochalov.pro"},
+        {"name": "L-Beauty", "site": "l-beauty.ru"},
+        {"name": "Гармония Сада", "site": "harmony-garden.ru"},
+        {"name": "Art Green Design", "site": "art-green.ru"}
+    ],
+    "Строительство загородных коттеджей Москва": [
+        {"name": "GOOD WOOD", "site": "gwd.ru"},
+        {"name": "Honka", "site": "honka.ru"},
+        {"name": "Ренессанс Строительство", "site": "ren-build.ru"},
+        {"name": "Мера-Строй", "site": "mera-stroy.ru"},
+        {"name": "Visilla", "site": "visilla.com"}
+    ],
+    "Премиальная стоматология виниры Москва": [
+        {"name": "Kraftway Clinic", "site": "kraftway.ru"},
+        {"name": "EMC Dental", "site": "emcmos.ru"},
+        {"name": "Президент Дент", "site": "president-dent.ru"},
+        {"name": "Ильинская больница", "site": "ihospital.ru"},
+        {"name": "Немецкий Имплантологический Центр", "site": "gic-dent.ru"}
+    ],
+    "Клиника эстетической медицины косметология Москва": [
+        {"name": "Remedy Lab", "site": "remedylab.ru"},
+        {"name": "Сенсави", "site": "sensavi.ru"},
+        {"name": "Эстелаб", "site": "estelab.ru"},
+        {"name": "Gen87", "site": "gen87.ru"},
+        {"name": "Tori Clinic", "site": "toriclinic.ru"}
+    ],
+    "Центр лазерной коррекции зрения Москва": [
+        {"name": "Клиника 3Z", "site": "3z.ru"},
+        {"name": "МНТК Микрохирургия глаза", "site": "mntk.ru"},
+        {"name": "Клиника Сфера", "site": "sferaeyecenter.ru"},
+        {"name": "Эксимер", "site": "excimerclinic.ru"},
+        {"name": "Восток-Прозрение", "site": "vostok-prozrenie.ru"}
+    ],
+    "Дизайнерская мебель на заказ Москва": [
+        {"name": "Dantone Home", "site": "dantonehome.ru"},
+        {"name": "Mr.Doors", "site": "mrdoors.ru"},
+        {"name": "Giulia Novars", "site": "giulianovars.ru"},
+        {"name": "Archpole", "site": "archpole.ru"},
+        {"name": "Wooddi", "site": "wooddi.ru"}
+    ],
+    "Интернет-магазин оригинальных наручных часов Москва": [
+        {"name": "Conquest Watches", "site": "conquest-watches.ru"},
+        {"name": "AllTime", "site": "alltime.ru"},
+        {"name": "Harold", "site": "haroldltd.ru"},
+        {"name": "Bestwatch", "site": "bestwatch.ru"},
+        {"name": "SwissTime Club", "site": "swisstime-club.ru"}
+    ],
+    "Студия элитного освещения Москва": [
+        {"name": "Центрсвет", "site": "centrsvet.ru"},
+        {"name": "Massive Light", "site": "massive-light.ru"},
+        {"name": "Свет Онлайн", "site": "svet-online.ru"},
+        {"name": "Artlight", "site": "artlight.ru"},
+        {"name": "Palantir", "site": "palantirsvet.ru"}
+    ],
+    "Юридическая компания для бизнеса Москва": [
+        {"name": "Vegas Lex", "site": "vegaslex.ru"},
+        {"name": "Пепеляев Групп", "site": "pgplaw.ru"},
+        {"name": "АЛРУД", "site": "alrud.ru"},
+        {"name": "ЕПАМ", "site": "epam.ru"},
+        {"name": "BGP Litigation", "site": "bgplaw.com"}
+    ],
+    "Аудиторская компания консалтинг Москва": [
+        {"name": "Б1 (Бизнес Решения)", "site": "b1.ru"},
+        {"name": "Kept", "site": "kept.ru"},
+        {"name": "ТеДо (Технологии Доверия)", "site": "tedo.ru"},
+        {"name": "ФинЭкспертиза", "site": "finexpertiza.ru"},
+        {"name": "Юникон", "site": "unicon.ru"}
+    ],
+    "Таможенное оформление логистика ВЭД Москва": [
+        {"name": "Major Cargo Service", "site": "mjr.ru"},
+        {"name": "Русмарин", "site": "rusmarine.ru"},
+        {"name": "Транзит Логистик", "site": "transitllc.ru"},
+        {"name": "КВТ Сервис", "site": "kvtservice.ru"},
+        {"name": "ВЭД Агент", "site": "vedagent.ru"}
+    ],
+    "Event агентство организация мероприятий Москва": [
+        {"name": "Подъёжики", "site": "eventpod.ru"},
+        {"name": "MAXIMICE", "site": "maximice.ru"},
+        {"name": "Redday", "site": "redday.ru"},
+        {"name": "Departament New&Wow", "site": "departament.com"},
+        {"name": "Darsy", "site": "darsy-event.ru"}
+    ],
+    "Премиальный кейтеринг банкеты Москва": [
+        {"name": "Dellos Catering", "site": "delloscatering.ru"},
+        {"name": "Novikov Catering", "site": "novikovcatering.ru"},
+        {"name": "Diamond Catering", "site": "diamondcatering.ru"},
+        {"name": "Corso Catering", "site": "corsocatering.ru"},
+        {"name": "ChanteCler", "site": "chantecler.ru"}
+    ]
+}
+
+# Черный список агрегаторов, СМИ и каталогов
 AGGREGATOR_DOMAINS = {
     "yandex.ru", "ya.ru", "google.com", "google.ru", "vk.com", "2gis.ru", "avito.ru",
     "hh.ru", "t.me", "youtube.com", "dzen.ru", "wikipedia.org", "habr.com", "zoon.ru",
@@ -65,25 +250,23 @@ AGGREGATOR_DOMAINS = {
     "yahoo.com", "duckduckgo.com", "expertology.ru", "kp.ru", "vc.ru", "dtf.ru", "pikabu.ru",
     "rbc.ru", "lenta.ru", "ria.ru", "gazeta.ru", "drive2.ru", "auto.ru", "drom.ru", "cian.ru",
     "realty.yandex.ru", "domclick.ru", "kommersant.ru", "irecommend.ru", "banki.ru",
-    "championat.com", "sport-express.ru", "livejournal.com", "tripadvisor.ru"
+    "championat.com", "sport-express.ru", "livejournal.com", "tripadvisor.ru", "allcafe.ru"
 }
 
-# Черный список недопустимых расширений файлов, похожих на email
 INVALID_EMAIL_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif", ".css", ".js", ".woff", ".woff2", ".ttf", ".ico"
 }
 
-# Домены заглушек или служебных систем
 IGNORED_EMAIL_DOMAINS = {
     "example.com", "domain.com", "sentry.io", "wixpress.com", "schema.org", "w3.org",
     "bootstrap.com", "cloudflare.com", "googleapis.com", "tilda.ws", "wordpress.org"
 }
 
 # ==============================================================================
-# РАБОТА С ХРАНИЛИЩЕМ LEADS.CSV
+# УПРАВЛЕНИЕ ХРАНИЛИЩЕМ LEADS.CSV
 # ==============================================================================
 def init_leads_csv(file_path: str = CSV_FILE_PATH):
-    """Инициализирует CSV-файл с заголовками, если файл еще не создан."""
+    """Создает CSV файл с заголовками, если файл еще не создан."""
     if not os.path.exists(file_path):
         with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.DictWriter(f, fieldnames=CSV_FIELDNAMES)
@@ -91,9 +274,7 @@ def init_leads_csv(file_path: str = CSV_FILE_PATH):
         print(f"[INIT] Создан файл базы лидов: {file_path}")
 
 def get_existing_leads_keys(file_path: str = CSV_FILE_PATH):
-    """
-    Возвращает множества существующих доменов и email для предотвращения дубликатов.
-    """
+    """Возвращает множества существующих доменов и email для дедупликации."""
     existing_domains = set()
     existing_emails = set()
 
@@ -113,7 +294,7 @@ def get_existing_leads_keys(file_path: str = CSV_FILE_PATH):
                 if email:
                     existing_emails.add(email)
     except Exception as e:
-        print(f"[WARN] Ошибка чтения существующего {file_path}: {e}")
+        print(f"[WARN] Ошибка чтения {file_path}: {e}")
 
     return existing_domains, existing_emails
 
@@ -125,11 +306,12 @@ def append_lead_to_csv(lead: dict, file_path: str = CSV_FILE_PATH):
         writer.writerow(lead)
 
 # ==============================================================================
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ И ОЧИСТКА ДАННЫХ
 # ==============================================================================
 def extract_root_domain(url: str) -> str:
     """Извлекает чистый домен из URL."""
     try:
+        url = url.strip()
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
         parsed = urllib.parse.urlparse(url)
@@ -140,19 +322,8 @@ def extract_root_domain(url: str) -> str:
     except Exception:
         return ""
 
-def decode_bing_url(url: str) -> str:
-    """Декодирует прямой целевой URL из поисковой выдачи Bing."""
-    if "u=a1" in url:
-        try:
-            b64_part = url.split("u=a1")[1].split("&")[0]
-            b64_part += "=" * ((4 - len(b64_part) % 4) % 4)
-            return base64.b64decode(b64_part).decode("utf-8", errors="ignore")
-        except Exception:
-            return url
-    return url
-
 def clean_company_name(raw_title: str, domain: str) -> str:
-    """Очищает заголовок страницы от рекламных суффиксов, оставляя чистое имя бренда."""
+    """Очищает заголовок сайта до чистого названия бренда."""
     if not raw_title:
         return domain.capitalize()
     parts = re.split(r"[\s\t]*[|—\-–•::][\s\t]*", raw_title)
@@ -164,7 +335,7 @@ def clean_company_name(raw_title: str, domain: str) -> str:
     return clean if clean else domain.capitalize()
 
 def is_valid_email(email: str) -> bool:
-    """Проверяет валидность email-адреса и отсеивает мусорные расширения и домены."""
+    """Проверяет валидность email-адреса и фильтрует мусор."""
     email = email.strip().lower()
     if not email or "@" not in email:
         return False
@@ -178,24 +349,24 @@ def is_valid_email(email: str) -> bool:
     return True
 
 # ==============================================================================
-# ПАРСИНГ САЙТА НА НАЛИЧИЕ EMAIL
+# ПАРСИНГ ЖИВОГО САЙТА НА НАЛИЧИЕ EMAIL
 # ==============================================================================
 def parse_emails_from_html(html_text: str) -> set:
-    """Извлекает email-адреса из mailto: ссылок и текста страницы."""
+    """Извлекает email-адреса из mailto: и регулярных выражений."""
     found = set()
     if not html_text:
         return found
 
     soup = BeautifulSoup(html_text, "html.parser")
 
-    # 1. Поиск ссылок mailto:
+    # 1. Ссылки mailto:
     for a in soup.select('a[href^="mailto:"]'):
         href = a.get("href", "")
         clean_mail = href.replace("mailto:", "").split("?")[0].strip().lower()
         if is_valid_email(clean_mail):
             found.add(clean_mail)
 
-    # 2. Поиск по тексту и атрибутам через регулярное выражение
+    # 2. Поиск по тексту регулярным выражением
     matches = EMAIL_REGEX.findall(html_text)
     for m in matches:
         clean_m = m.strip(".,;:!? \t\r\n'\"").lower()
@@ -205,8 +376,8 @@ def parse_emails_from_html(html_text: str) -> set:
     return found
 
 def find_contact_page_url(soup: BeautifulSoup, base_url: str) -> str:
-    """Ищет ссылку на раздел контактов внутри HTML страницы."""
-    keywords = ["kontakt", "contact", "контакт", "о нас", "about", "связь", "rekvizit", "реквизит"]
+    """Ищет ссылку на раздел контактов внутри HTML."""
+    keywords = ["kontakt", "contact", "контакт", "о нас", "about", "связь", "rekvizit", "реквизит", "feedback"]
     for a in soup.find_all("a", href=True):
         href = a.get("href", "").strip()
         text = a.get_text(strip=True).lower()
@@ -219,8 +390,8 @@ def find_contact_page_url(soup: BeautifulSoup, base_url: str) -> str:
 
 def extract_lead_from_website(url: str, default_name: str = "") -> dict:
     """
-    Загружает главную страницу (и при необходимости страницу контактов)
-    и извлекает контактный email и название организации.
+    Загружает официальный сайт компании, проверяет доступность,
+    обходит контакты и возвращает проверенный email.
     """
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
@@ -239,16 +410,14 @@ def extract_lead_from_website(url: str, default_name: str = "") -> dict:
 
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # Определение названия бренда
         if not company_name:
             title_tag = soup.find("title")
             raw_title = title_tag.get_text(strip=True) if title_tag else ""
             company_name = clean_company_name(raw_title, domain)
 
-        # Сбор email с главной страницы
         emails.update(parse_emails_from_html(r.text))
 
-        # Если на главной нет email, парсим страницу контактов
+        # Если на главной нет email, ищем страницу контактов
         if not emails:
             contact_url = find_contact_page_url(soup, url)
             if contact_url and contact_url != url:
@@ -263,7 +432,7 @@ def extract_lead_from_website(url: str, default_name: str = "") -> dict:
         return None
 
     if emails:
-        # Приоритет корпоративным адресам
+        # Приоритет официальным корпоративным почтам
         preferred_prefixes = ("info@", "contact@", "mail@", "hello@", "sales@", "director@", "office@")
         selected_email = None
         for pref in preferred_prefixes:
@@ -286,99 +455,101 @@ def extract_lead_from_website(url: str, default_name: str = "") -> dict:
     return None
 
 # ==============================================================================
-# ПОИСК КОМПАНИЙ ПО НИШЕ
+# ПОИСК ЦЕЛЕВЫХ КОМПАНИЙ ЧЕРЕЗ ИНТЕЛЛЕКТУАЛЬНЫЙ МОДУЛЬ GEMINI
 # ==============================================================================
-def search_websites_by_niche(niche: str, max_results: int = 15) -> list:
+def discover_companies_via_gemini(niche: str, count: int = 5) -> list:
     """
-    Ищет сайты компаний в заданной нише через веб-поиск Bing.
+    Использует Gemini 3.8 Flash для мгновенного нахождения реальных компаний
+    и их официальных сайтов в заданной нише без блокировок и капч.
     """
-    search_queries = [
-        f"{niche} официальный сайт",
-        f"{niche} студия контакты",
-        f"{niche} услуги компания"
-    ]
+    if not GEMINI_API_KEY:
+        return []
 
-    discovered_candidates = []
-    seen_domains = set()
+    prompt = f"""
+Ты — профессиональный B2B-исследователь рынка.
+Найди {count + 2} реальных действующих компаний/студий/бюро в регионе Москва и РФ в нише: "{niche}".
+Для каждой компании укажи ее реальное точное название и действующий официальный сайт (домен).
+Не указывай агрегаторы (2GIS, Авито, Яндекс, Zoon, Отзовик, HH). Только прямые сайты бизнесов!
 
-    for query in search_queries:
-        if len(discovered_candidates) >= max_results:
-            break
+Верни результат СТРОГО в формате валидного JSON-массива:
+[
+  {{"name": "Название компании", "site": "domain.ru"}},
+  ...
+]
+"""
+    models_to_try = [GEMINI_MODEL, "gemini-3.5-flash", "gemini-3.5-flash-lite"]
+    seen_models = []
+    for m in models_to_try:
+        if m and m not in seen_models:
+            seen_models.append(m)
 
-        url = f"https://www.bing.com/search?q={urllib.parse.quote(query)}"
+    for model_name in seen_models:
         try:
-            r = requests.get(url, headers=DEFAULT_HEADERS, timeout=9)
-            if r.status_code != 200:
-                continue
-
-            soup = BeautifulSoup(r.text, "html.parser")
-            for h2 in soup.find_all("h2"):
-                a = h2.find("a")
-                if not a:
-                    continue
-                raw_href = a.get("href", "")
-                raw_title = a.get_text(strip=True)
-
-                dest_url = decode_bing_url(raw_href)
-                domain = extract_root_domain(dest_url)
-
-                if domain and domain not in AGGREGATOR_DOMAINS and domain not in seen_domains:
-                    seen_domains.add(domain)
-                    discovered_candidates.append({
-                        "name": clean_company_name(raw_title, domain),
-                        "url": dest_url
-                    })
-
-            time.sleep(1.2)
+            from google import genai
+            client = genai.Client(api_key=GEMINI_API_KEY, http_options={"timeout": 10.0})
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            if response and response.text:
+                text = response.text.strip()
+                # Извлечение JSON блока из ответа
+                json_match = re.search(r"\[\s*\{.*\}\s*\]", text, re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group(0))
+                    if parsed:
+                        return parsed
         except Exception as e:
-            print(f"[WARN] Ошибка поискового запроса '{query}': {e}")
+            continue
 
-    return discovered_candidates[:max_results]
+    return []
 
 # ==============================================================================
-# ОСНОВНОЙ ПРОЦЕСС ПОИСКА И ДОБАВЛЕНИЯ В CSV
+# ОСНОВНОЙ ПРОЦЕСС ОБРАБОТКИ ОДНОЙ НИШИ
 # ==============================================================================
 def find_and_save_leads(niche: str = "", target_count: int = 3, output_csv: str = CSV_FILE_PATH) -> int:
     """
-    Ищет компании по нише, извлекает контакты и добавляет уникальные записи в CSV.
-    Возвращает количество добавленных лидов.
+    Ищет компании по заданной нише, верифицирует их сайты и сохраняет новые лиды в CSV.
     """
     if not niche or "\ufffd" in niche or "?" in niche:
-        # Автоматический выбор из качественных пресетов, если передан поврежденный аргумент
-        niche = DEFAULT_TARGET_NICHES[0]
-
-    print("=" * 65)
-    print(f"[LEAD FINDER] Поиск компаний в нише: '{niche}'")
-    print(f"Цель: найти до {target_count} уникальных контактов")
-    print("=" * 65)
+        niche = COMMERCIAL_NICHES_CATALOG[0]
 
     init_leads_csv(output_csv)
     existing_domains, existing_emails = get_existing_leads_keys(output_csv)
-    print(f"[INFO] Текущая база {output_csv} содержит {len(existing_emails)} email и {len(existing_domains)} доменов.")
 
-    print(f"[SEARCH] Сканирование поисковой выдачи...")
-    candidates = search_websites_by_niche(niche, max_results=target_count * 4)
-    print(f"[FOUND] Найдено {len(candidates)} потенциальных сайтов компаний.")
+    print(f"\n[SCAN] Ниша: '{niche}' (цель: до {target_count} уникальных контактов)")
+
+    # 1. Интеллектуальный поиск кандидатов (Gemini + надежная база ниши)
+    candidates = discover_companies_via_gemini(niche, count=target_count * 2)
+    seed_candidates = SEED_CATALOG_COMPANIES.get(niche, [])
+
+    combined_candidates = []
+    seen_sites = set()
+    for cand in candidates + seed_candidates:
+        s = cand.get("site", "").strip().lower()
+        if s and s not in seen_sites:
+            seen_sites.add(s)
+            combined_candidates.append(cand)
 
     new_leads_saved = 0
 
-    for idx, cand in enumerate(candidates, 1):
+    # 2. Обход каждого сайта и парсинг реальной контактной почты
+    for cand in combined_candidates:
         if new_leads_saved >= target_count:
             break
 
-        cand_url = cand["url"]
-        domain = extract_root_domain(cand_url)
+        cand_site = cand.get("site", "").strip()
+        cand_name = cand.get("name", "").strip()
+        domain = extract_root_domain(cand_site)
 
-        if domain in existing_domains or domain in AGGREGATOR_DOMAINS:
+        if not domain or domain in existing_domains or domain in AGGREGATOR_DOMAINS:
             continue
 
-        print(f"[{idx}/{len(candidates)}] [SCAN] Проверка сайта {cand_url}...")
-        lead_data = extract_lead_from_website(cand_url, default_name=cand["name"])
+        lead_data = extract_lead_from_website(domain, default_name=cand_name)
 
         if lead_data:
             email = lead_data["contact_email"]
             if email in existing_emails:
-                print(f"  -> [SKIP] Email {email} уже есть в базе.")
                 continue
 
             lead_record = {
@@ -396,29 +567,74 @@ def find_and_save_leads(niche: str = "", target_count: int = 3, output_csv: str 
             existing_emails.add(email)
             new_leads_saved += 1
 
-            print(f"  -> [SUCCESS] Добавлен лид: {lead_data['name']} ({domain}) -> {email}")
-        else:
-            print(f"  -> [INFO] На сайте {domain} прямой email не обнаружен.")
+            print(f"  + [ЛИД] {lead_data['name']} ({domain}) -> {email}")
 
-        time.sleep(1.0)
+        time.sleep(0.6)
+
+    print(f"  -> Итог по нише: добавлено {new_leads_saved} новых уникальных лидов.")
+    return new_leads_saved
+
+# ==============================================================================
+# АВТОМАТИЧЕСКИЙ ПАЙПЛАЙН ПО ВСЕМ НИШАМ
+# ==============================================================================
+def find_and_save_all_niches(count_per_niche: int = 3, output_csv: str = CSV_FILE_PATH, delay_between_niches: float = 1.5) -> int:
+    """
+    Автоматически сканирует все 19 целевых коммерческих ниш каталога
+    и наполняет leads.csv уникальными лидами.
+    """
+    print("=" * 65)
+    print("[ALL-NICHES PIPELINE] Запуск автоматического поиска по всем нишам")
+    print(f"Всего ниш в очереди: {len(COMMERCIAL_NICHES_CATALOG)}")
+    print(f"Цель на каждую нишу: {count_per_niche} уникальных контактов")
+    print(f"Файл назначения: {os.path.abspath(output_csv)}")
+    print("=" * 65)
+
+    init_leads_csv(output_csv)
+    start_domains, start_emails = get_existing_leads_keys(output_csv)
+    print(f"[STATUS] До старта в базе уже есть: {len(start_emails)} email и {len(start_domains)} доменов.")
+
+    total_added = 0
+    start_time = time.time()
+
+    for idx, niche in enumerate(COMMERCIAL_NICHES_CATALOG, 1):
+        print(f"\n[{idx}/{len(COMMERCIAL_NICHES_CATALOG)}] Обработка ниши...")
+        try:
+            added = find_and_save_leads(niche=niche, target_count=count_per_niche, output_csv=output_csv)
+            total_added += added
+        except Exception as e:
+            print(f"[ERROR] Ошибка сканирования ниши '{niche}': {e}")
+
+        if idx < len(COMMERCIAL_NICHES_CATALOG):
+            time.sleep(delay_between_niches)
+
+    elapsed_minutes = round((time.time() - start_time) / 60, 1)
+    end_domains, end_emails = get_existing_leads_keys(output_csv)
 
     print("\n" + "=" * 65)
-    print(f"[COMPLETED] Поиск завершен. Добавлено новых уникальных лидов: {new_leads_saved}")
-    print(f"Файл сохранен: {os.path.abspath(output_csv)}")
+    print("[COMPLETED] Автоматический сбор по всем нишам успешно завершен!")
+    print(f"Время выполнения: {elapsed_minutes} мин.")
+    print(f"Всего добавлено новых лидов за прогон: {total_added}")
+    print(f"Итоговый размер базы {output_csv}: {len(end_emails)} уникальных контактов")
     print("=" * 65)
-    return new_leads_saved
+    return total_added
 
 # ==============================================================================
 # ТОЧКА ВХОДА
 # ==============================================================================
 def main():
-    parser = argparse.ArgumentParser(description="Автоматический поиск лидов и парсер контактов NEOCORE STUDIO")
-    parser.add_argument("--niche", type=str, default="", help="Ниша и регион для поиска компаний")
-    parser.add_argument("--count", type=int, default=3, help="Сколько уникальных лидов с почтами требуется найти")
-    parser.add_argument("--csv", type=str, default=CSV_FILE_PATH, help="Путь к файлу leads.csv")
+    parser = argparse.ArgumentParser(description="Автоматический сбор лидов по всем нишам NEOCORE STUDIO")
+    parser.add_argument("--all", action="store_true", help="Запустить автоматический поиск по ВСЕМ нишам каталога")
+    parser.add_argument("--niche", type=str, default="", help="Конкретная ниша (если не указано --all)")
+    parser.add_argument("--count", type=int, default=3, help="Количество контактов на каждую нишу")
+    parser.add_argument("--csv", type=str, default=CSV_FILE_PATH, help="Путь к файлу базы leads.csv")
 
     args = parser.parse_args()
-    find_and_save_leads(niche=args.niche, target_count=args.count, output_csv=args.csv)
+
+    # По умолчанию запускаем сканирование по всем нишам
+    if args.all or not args.niche or args.niche.strip().lower() in ("all", "*", "все"):
+        find_and_save_all_niches(count_per_niche=args.count, output_csv=args.csv)
+    else:
+        find_and_save_leads(niche=args.niche, target_count=args.count, output_csv=args.csv)
 
 if __name__ == "__main__":
     main()
