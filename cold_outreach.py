@@ -15,7 +15,8 @@ import sys
 import csv
 import time
 import smtplib
-from datetime import datetime
+import argparse
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -177,6 +178,19 @@ def replenish_leads_from_finder(file_path: str = CSV_FILE_PATH, count_per_niche:
         print(f"[WARN] Не удалось выполнить автопополнение через lead_finder: {e}")
         return 0
 
+def count_sent_today(file_path: str = CSV_FILE_PATH, day_str: str = "") -> int:
+    """Подсчитывает количество успешно отправленных писем за указанную дату."""
+    if not day_str:
+        day_str = datetime.now().strftime("%Y-%m-%d")
+    leads = load_leads_from_csv(file_path)
+    count = 0
+    for l in leads:
+        if l.get("status", "").strip().lower() == "sent":
+            sent_at = l.get("sent_at", "").strip()
+            if sent_at.startswith(day_str):
+                count += 1
+    return count
+
 # ==============================================================================
 # ГЕНЕРАЦИЯ ОФФЕРА ЧЕРЕЗ GEMINI 3.8 FLASH
 # ==============================================================================
@@ -277,29 +291,155 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
         return False
 
 # ==============================================================================
-# ОСНОВНОЙ РАБОЧИЙ ЦИКЛ
+# АВТОНОМНЫЙ НЕПРЕРЫВНЫЙ ЦИКЛ 24/7
 # ==============================================================================
-def main():
+def run_autonomous_loop(
+    csv_file: str = CSV_FILE_PATH,
+    daily_limit: int = 30,
+    delay_seconds: int = DISPATCH_DELAY_SECONDS,
+    start_hour: int = 9,
+    end_hour: int = 19,
+    ignore_hours: bool = False,
+    idle_sleep_seconds: int = 1800
+):
+    """
+    Непрерывный автономный демон рассылки 24/7 с контролем дневных лимитов,
+    соблюдением рабочих часов и автоматическим добором лидов при пустой очереди.
+    """
     print("=" * 65)
-    print(f"[{STUDIO_NAME}] Модуль автоматического B2B-аутрича")
-    print(f"Источник базы: {CSV_FILE_PATH}")
-    print(f"Модель генерации: {GEMINI_MODEL}")
-    print(f"Задержка между отправками: {DISPATCH_DELAY_SECONDS} сек.")
+    print(f"[{STUDIO_NAME}] Запуск автономного режима аутрича 24/7")
+    print(f"Источник базы: {csv_file}")
+    print(f"Дневной лимит: {daily_limit} писем/сутки")
+    if ignore_hours:
+        print("Рабочие часы: круглосуточно (контроль времени отключен)")
+    else:
+        print(f"Рабочие часы отправки: с {start_hour:02d}:00 до {end_hour:02d}:00")
+    print(f"Интервал между отправками: {delay_seconds} сек.")
     print("=" * 65)
 
-    all_leads = load_leads_from_csv(CSV_FILE_PATH)
+    current_day = datetime.now().strftime("%Y-%m-%d")
+    sent_today = count_sent_today(csv_file, current_day)
+    print(f"[STATUS] За сегодня ({current_day}) уже отправлено: {sent_today}/{daily_limit} писем.")
+
+    while True:
+        try:
+            now = datetime.now()
+            today_str = now.strftime("%Y-%m-%d")
+
+            # Смена календарного дня - сброс дневного счетчика
+            if today_str != current_day:
+                current_day = today_str
+                sent_today = count_sent_today(csv_file, current_day)
+                print(f"\n[NEW DAY] Наступил новый день: {current_day}. Дневной счетчик сброшен.")
+
+            # Проверка рабочих часов (B2B этика: не слать в нерабочее время)
+            if not ignore_hours and not (start_hour <= now.hour < end_hour):
+                if now.hour >= end_hour:
+                    next_run = (now.replace(hour=start_hour, minute=0, second=0, microsecond=0) + timedelta(days=1))
+                else:
+                    next_run = now.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+
+                sleep_secs = max(60, int((next_run - now).total_seconds()))
+                hours_sleep = round(sleep_secs / 3600, 1)
+                print(f"[NIGHT MODE] Вне рабочих часов ({start_hour:02d}:00 - {end_hour:02d}:00). Пауза до {next_run.strftime('%Y-%m-%d %H:%M:%S')} (~{hours_sleep} ч.)...")
+                time.sleep(min(sleep_secs, 1800))
+                continue
+
+            # Проверка исчерпания дневного лимита
+            if sent_today >= daily_limit:
+                tomorrow = (now + timedelta(days=1)).replace(hour=start_hour if not ignore_hours else 0, minute=0, second=0, microsecond=0)
+                sleep_secs = max(60, int((tomorrow - now).total_seconds()))
+                hours_sleep = round(sleep_secs / 3600, 1)
+                print(f"[LIMIT REACHED] Дневной лимит ({daily_limit} писем) исчерпан. Ожидание следующего дня до {tomorrow.strftime('%Y-%m-%d %H:%M:%S')} (~{hours_sleep} ч.)...")
+                time.sleep(min(sleep_secs, 1800))
+                continue
+
+            # Загрузка базы
+            all_leads = load_leads_from_csv(csv_file)
+            pending_leads = [l for l in all_leads if l.get("status", "").strip().lower() != "sent"]
+
+            # Если база исчерпана - автопополнение
+            if not pending_leads and AUTO_REPLENISH_LEADS:
+                print("\n[AUTOLOAD] В базе нет неотправленных контактов. Запуск lead_finder по всем нишам...")
+                added = replenish_leads_from_finder(csv_file, count_per_niche=2)
+                all_leads = load_leads_from_csv(csv_file)
+                pending_leads = [l for l in all_leads if l.get("status", "").strip().lower() != "sent"]
+                print(f"[AUTOLOAD] Добавлено {added} новых лидов в очередь.")
+
+            if not pending_leads:
+                print(f"[IDLE] Новых лидов в очереди нет. Ожидание {round(idle_sleep_seconds / 60)} мин. перед повторной проверкой...")
+                time.sleep(idle_sleep_seconds)
+                continue
+
+            # Обрабатываем один лид из очереди
+            lead = pending_leads[0]
+            company = lead.get("name", "Компания")
+            niche = lead.get("niche", "Сфера услуг")
+            site = lead.get("site", "официальный сайт")
+            email = lead.get("contact_email", "").strip()
+
+            print(f"\n[DISPATCH] [{sent_today + 1}/{daily_limit}] Обработка: {company} ({niche})")
+            print(f"[TARGET] Адрес получателя: {email}")
+
+            if not email or "@" not in email:
+                print("[SKIP] Некорректный email. Статус: invalid_email.")
+                update_lead_status(csv_file, email, new_status="invalid_email")
+                continue
+
+            print(f"[AI] Генерация персонализированного оффера ({GEMINI_MODEL})...")
+            subject = f"{company} // Увеличение конверсии сайта и 3D-интерактив"
+            pitch = generate_pitch(company, niche, site)
+
+            print(f"[SEND] Отправка через SMTP-сервер ({SMTP_SERVER})...")
+            is_sent = send_email(email, subject, pitch)
+
+            if is_sent:
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                update_lead_status(csv_file, email, new_status="sent", sent_at=now_str)
+                sent_today += 1
+                print(f"[PROGRESS] Успешно отправлено. Сегодняшний прогресс: {sent_today}/{daily_limit} писем.")
+            else:
+                update_lead_status(csv_file, email, new_status="failed")
+                print(f"[WARN] Ошибка отправки на {email}. Статус обновлен на failed.")
+
+            if sent_today < daily_limit:
+                print(f"[PAUSE] Пауза {delay_seconds} сек. для защиты репутации домена...")
+                time.sleep(delay_seconds)
+
+        except KeyboardInterrupt:
+            print("\n[STOP] Автономный режим 24/7 остановлен пользователем.")
+            break
+        except Exception as e:
+            print(f"[ERROR] Ошибка в автономном цикле: {e}")
+            time.sleep(60)
+
+# ==============================================================================
+# РАЗОВЫЙ ПАКЕТНЫЙ ЗАПУСК
+# ==============================================================================
+def run_single_batch(csv_file: str = CSV_FILE_PATH, delay_seconds: int = DISPATCH_DELAY_SECONDS):
+    """
+    Обрабатывает текущую очередь leads.csv один раз и завершает выполнение.
+    """
+    print("=" * 65)
+    print(f"[{STUDIO_NAME}] Модуль разового B2B-аутрича")
+    print(f"Источник базы: {csv_file}")
+    print(f"Модель генерации: {GEMINI_MODEL}")
+    print(f"Задержка между отправками: {delay_seconds} сек.")
+    print("=" * 65)
+
+    all_leads = load_leads_from_csv(csv_file)
     pending_leads = [l for l in all_leads if l.get("status", "").strip().lower() != "sent"]
 
     # Автопополнение, если неотправленных лидов не осталось
     if not pending_leads and AUTO_REPLENISH_LEADS:
         print("[INFO] В базе leads.csv нет неотправленных лидов. Запуск автопополнения...")
-        replenish_leads_from_finder(CSV_FILE_PATH, count=3)
-        all_leads = load_leads_from_csv(CSV_FILE_PATH)
+        replenish_leads_from_finder(csv_file, count_per_niche=2)
+        all_leads = load_leads_from_csv(csv_file)
         pending_leads = [l for l in all_leads if l.get("status", "").strip().lower() != "sent"]
 
     if not pending_leads:
-        print("[INFO] Очередь отправки пуста. Все контакты из leads.csv уже обработаны.")
-        print("Для добавления новых лидов запустите: python lead_finder.py --niche \"Ваша ниша\"")
+        print("[INFO] Очередь отправки пуста. Все контакты из базы уже обработаны.")
+        print("Для запуска непрерывного режима используйте: python cold_outreach.py --loop")
         return
 
     print(f"[QUEUE] Найдено {len(pending_leads)} лидов со статусом 'pending' (не отправлено).")
@@ -330,20 +470,52 @@ def main():
 
         if is_sent:
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            update_lead_status(CSV_FILE_PATH, email, new_status="sent", sent_at=now_str)
-            print(f"[UPDATED] Запись {email} помечена как 'sent' в {CSV_FILE_PATH}.")
+            update_lead_status(csv_file, email, new_status="sent", sent_at=now_str)
+            print(f"[UPDATED] Запись {email} помечена как 'sent' в {csv_file}.")
         else:
-            update_lead_status(CSV_FILE_PATH, email, new_status="failed")
-            print(f"[WARN] Запись {email} помечена как 'failed' в {CSV_FILE_PATH}.")
+            update_lead_status(csv_file, email, new_status="failed")
+            print(f"[WARN] Запись {email} помечена как 'failed' в {csv_file}.")
 
         if index < len(pending_leads):
-            print(f"[PAUSE] Ожидание {DISPATCH_DELAY_SECONDS} сек. для защиты от спам-фильтров...")
-            time.sleep(DISPATCH_DELAY_SECONDS)
+            print(f"[PAUSE] Ожидание {delay_seconds} сек. для защиты от спам-фильтров...")
+            time.sleep(delay_seconds)
 
     print("\n" + "=" * 65)
     print("[COMPLETED] Вся очередь неотправленных лидов успешно обработана.")
-    print(f"Актуальное состояние базы зафиксировано в {CSV_FILE_PATH}")
+    print(f"Актуальное состояние базы зафиксировано в {csv_file}")
     print("=" * 65)
+
+# ==============================================================================
+# ТОЧКА ВХОДА
+# ==============================================================================
+def main():
+    parser = argparse.ArgumentParser(description="Автоматизированный B2B-аутрич NEOCORE STUDIO")
+    parser.add_argument("--loop", action="store_true", help="Запустить автономный непрерывный режим 24/7")
+    parser.add_argument("--daily-limit", type=int, default=30, help="Дневной лимит отправок (по умолчанию: 30)")
+    parser.add_argument("--delay", type=int, default=DISPATCH_DELAY_SECONDS, help="Задержка между письмами в сек. (по умолчанию: 15)")
+    parser.add_argument("--start-hour", type=int, default=9, help="Час начала отправки (по умолчанию: 9)")
+    parser.add_argument("--end-hour", type=int, default=19, help="Час завершения отправки (по умолчанию: 19)")
+    parser.add_argument("--ignore-hours", action="store_true", help="Отправлять в любое время, игнорируя ночные часы")
+    parser.add_argument("--idle-sleep", type=int, default=1800, help="Пауза при пустой очереди в сек. (по умолчанию: 1800)")
+    parser.add_argument("--csv", type=str, default=CSV_FILE_PATH, help="Путь к файлу базы leads.csv")
+
+    args = parser.parse_args()
+
+    if args.loop:
+        run_autonomous_loop(
+            csv_file=args.csv,
+            daily_limit=args.daily_limit,
+            delay_seconds=args.delay,
+            start_hour=args.start_hour,
+            end_hour=args.end_hour,
+            ignore_hours=args.ignore_hours,
+            idle_sleep_seconds=args.idle_sleep
+        )
+    else:
+        run_single_batch(
+            csv_file=args.csv,
+            delay_seconds=args.delay
+        )
 
 if __name__ == "__main__":
     main()
