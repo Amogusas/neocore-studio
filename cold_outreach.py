@@ -16,6 +16,8 @@ import csv
 import time
 import smtplib
 import argparse
+import html
+import urllib.parse
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -163,14 +165,19 @@ def load_leads_from_csv(file_path: str = CSV_FILE_PATH) -> list:
 def update_lead_status(file_path: str, contact_email: str, new_status: str, sent_at: str = "") -> bool:
     """
     Обновляет статус и время отправки конкретного лида в leads.csv.
-    Исключает повторные отправки при перезапуске скрипта.
+    Поддерживает поиск как по сырому, так и по URL-декодированному email.
     """
     leads = load_leads_from_csv(file_path)
     updated = False
+    clean_target = urllib.parse.unquote(html.unescape(contact_email)).strip().lower()
 
     for row in leads:
-        if row.get("contact_email", "").strip().lower() == contact_email.strip().lower():
-            if row.get("status") != "sent":
+        row_mail = row.get("contact_email", "").strip().lower()
+        clean_row_mail = urllib.parse.unquote(html.unescape(row_mail)).strip().lower()
+
+        if row_mail == contact_email.strip().lower() or clean_row_mail == clean_target:
+            row["contact_email"] = clean_target  # нормализуем email в базе к чистому виду
+            if row.get("status") != "sent" or new_status == "sent":
                 row["status"] = new_status
                 if sent_at:
                     row["sent_at"] = sent_at
@@ -295,6 +302,16 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
     """
     Отправляет сформированное письмо через защищенный SMTP шлюз.
     """
+    # Полное декодирование URL-escaped и HTML сущностей
+    try:
+        to_email = urllib.parse.unquote(html.unescape(to_email)).strip().lower()
+    except Exception:
+        to_email = to_email.strip().lower()
+
+    if not to_email or "@" not in to_email or "%" in to_email or " " in to_email:
+        print(f"[SKIP] Некорректный email адрес (RFC 5321): '{to_email}'. Отправка отменена.")
+        return False
+
     if not SMTP_PASSWORD or SMTP_PASSWORD == "YOUR_APP_PASSWORD_HERE":
         print(f"[DRY-RUN] Пароль приложения SMTP не настроен. Симуляция успешной отправки на <{to_email}>.")
         return True
@@ -406,14 +423,15 @@ def run_autonomous_loop(
             company = lead.get("name", "Компания")
             niche = lead.get("niche", "Сфера услуг")
             site = lead.get("site", "официальный сайт")
-            email = lead.get("contact_email", "").strip()
+            raw_email = lead.get("contact_email", "").strip()
+            email = urllib.parse.unquote(html.unescape(raw_email)).strip().lower()
 
             print(f"\n[DISPATCH] [{sent_today + 1}/{daily_limit}] Обработка: {company} ({niche})")
             print(f"[TARGET] Адрес получателя: {email}")
 
-            if not email or "@" not in email:
-                print("[SKIP] Некорректный email. Статус: invalid_email.")
-                update_lead_status(csv_file, email, new_status="invalid_email")
+            if not email or "@" not in email or "%" in email:
+                print(f"[SKIP] Некорректный email адрес: '{email}'. Статус: invalid_email.")
+                update_lead_status(csv_file, raw_email, new_status="invalid_email")
                 continue
 
             print(f"[AI] Генерация персонализированного оффера ({GEMINI_MODEL})...")
@@ -478,13 +496,15 @@ def run_single_batch(csv_file: str = CSV_FILE_PATH, delay_seconds: int = DISPATC
         company = lead.get("name", "Компания")
         niche = lead.get("niche", "Сфера услуг")
         site = lead.get("site", "официальный сайт")
-        email = lead.get("contact_email", "").strip()
+        raw_email = lead.get("contact_email", "").strip()
+        email = urllib.parse.unquote(html.unescape(raw_email)).strip().lower()
 
         print(f"\n[{index}/{len(pending_leads)}] Обработка: {company} | Ниша: {niche}")
         print(f"[TARGET] Адрес получателя: {email}")
 
-        if not email or "@" not in email:
-            print("[SKIP] Некорректный email. Пропуск записи.")
+        if not email or "@" not in email or "%" in email:
+            print(f"[SKIP] Некорректный email адрес: '{email}'. Пропуск записи.")
+            update_lead_status(csv_file, raw_email, new_status="invalid_email")
             continue
 
         print(f"[AI] Генерация оффера через {GEMINI_MODEL}...")

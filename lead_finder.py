@@ -15,6 +15,7 @@ import re
 import sys
 import csv
 import json
+import html
 import time
 import base64
 import argparse
@@ -335,43 +336,72 @@ def clean_company_name(raw_title: str, domain: str) -> str:
     return clean if clean else domain.capitalize()
 
 def is_valid_email(email: str) -> bool:
-    """Проверяет валидность email-адреса и фильтрует мусор."""
-    email = email.strip().lower()
+    """Проверяет валидность email-адреса по стандарту RFC 5321 и фильтрует мусор."""
+    if not email:
+        return False
+
+    # Автоматическое декодирование URL-escaped (%72%67... -> rg...) и HTML-сущностей
+    try:
+        email = urllib.parse.unquote(html.unescape(email)).strip().lower()
+    except Exception:
+        email = email.strip().lower()
+
     if not email or "@" not in email:
         return False
+
+    # В валидном RFC 5321 email не должно быть % (недекодированных URL escape), пробелов и слэшей
+    if "%" in email or " " in email or "\\" in email or "/" in email:
+        return False
+
     if len(email) < 6 or len(email) > 60:
         return False
+
     if any(email.endswith(ext) for ext in INVALID_EMAIL_EXTENSIONS):
         return False
-    domain_part = email.split("@")[-1]
+
+    parts = email.split("@")
+    if len(parts) != 2:
+        return False
+
+    user_part, domain_part = parts
+    if not user_part or not domain_part or "." not in domain_part:
+        return False
+
     if domain_part in IGNORED_EMAIL_DOMAINS:
         return False
+
     return True
 
 # ==============================================================================
 # ПАРСИНГ ЖИВОГО САЙТА НА НАЛИЧИЕ EMAIL
 # ==============================================================================
 def parse_emails_from_html(html_text: str) -> set:
-    """Извлекает email-адреса из mailto: и регулярных выражений."""
+    """Извлекает email-адреса из mailto: и регулярных выражений с полной очисткой."""
     found = set()
     if not html_text:
         return found
 
-    soup = BeautifulSoup(html_text, "html.parser")
+    # Декодируем HTML-сущности
+    decoded_html = html.unescape(html_text)
+    soup = BeautifulSoup(decoded_html, "html.parser")
 
-    # 1. Ссылки mailto:
-    for a in soup.select('a[href^="mailto:"]'):
+    # 1. Ссылки mailto: (включая obfuscated и URL-encoded варианты)
+    for a in soup.select('a[href*="mailto:"]'):
         href = a.get("href", "")
-        clean_mail = href.replace("mailto:", "").split("?")[0].strip().lower()
+        # Извлекаем email после mailto:
+        mailto_part = href.split("mailto:", 1)[-1].split("?")[0].strip()
+        # Декодируем %72%67... -> rg...
+        clean_mail = urllib.parse.unquote(html.unescape(mailto_part)).strip(" \t\r\n'\"").lower()
         if is_valid_email(clean_mail):
             found.add(clean_mail)
 
-    # 2. Поиск по тексту регулярным выражением
-    matches = EMAIL_REGEX.findall(html_text)
-    for m in matches:
-        clean_m = m.strip(".,;:!? \t\r\n'\"").lower()
-        if is_valid_email(clean_m):
-            found.add(clean_m)
+    # 2. Поиск по тексту регулярным выражением (сканируем как decoded_html, так и unquoted_html)
+    for text_to_scan in (decoded_html, urllib.parse.unquote(decoded_html)):
+        matches = EMAIL_REGEX.findall(text_to_scan)
+        for m in matches:
+            clean_m = urllib.parse.unquote(html.unescape(m)).strip(".,;:!? \t\r\n'\"").lower()
+            if is_valid_email(clean_m):
+                found.add(clean_m)
 
     return found
 
