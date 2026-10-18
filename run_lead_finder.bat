@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title NEOCORE STUDIO // Multi-Niche Lead Discovery
+title NEOCORE STUDIO - Multi-Niche Lead Discovery
 cd /d "%~dp0"
 
 echo =====================================================================

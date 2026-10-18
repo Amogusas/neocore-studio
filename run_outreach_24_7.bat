@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title NEOCORE STUDIO // Automated 24/7 B2B Outreach Engine
+title NEOCORE STUDIO - Automated 24/7 B2B Outreach Engine
 cd /d "%~dp0"
 
 echo =====================================================================

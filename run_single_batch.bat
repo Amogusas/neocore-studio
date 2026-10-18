@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title NEOCORE STUDIO // Single Batch Outreach
+title NEOCORE STUDIO - Single Batch Outreach
 cd /d "%~dp0"
 
 echo =====================================================================

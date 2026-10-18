@@ -20,11 +20,41 @@ from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Обеспечение корректного вывода UTF-8 в Windows PowerShell
+LOG_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outreach.log")
+
+class DualLogger:
+    """Дублирует весь вывод одновременно в консоль и в файл outreach.log."""
+    def __init__(self, filepath, stream):
+        self.stream = stream
+        self.logfile = open(filepath, "a", encoding="utf-8", buffering=1)
+
+    def write(self, message):
+        try:
+            self.stream.write(message)
+        except Exception:
+            pass
+        try:
+            self.logfile.write(message)
+        except Exception:
+            pass
+
+    def flush(self):
+        try:
+            self.stream.flush()
+        except Exception:
+            pass
+        try:
+            self.logfile.flush()
+        except Exception:
+            pass
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+sys.stdout = DualLogger(LOG_FILE_PATH, sys.stdout)
+sys.stderr = DualLogger(LOG_FILE_PATH, sys.stderr)
 
 # Автоматическая загрузка переменных окружения из .env
 def _load_env_file():
