@@ -396,10 +396,26 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      transition: height 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .hero-3d-stage.is-3d-hidden {
+      height: 320px;
     }
 
     @media (max-width: 960px) {
-      .hero-3d-stage { height: 350px; }
+      .hero-3d-stage { height: 360px; }
+      .hero-3d-stage.is-3d-hidden { height: 260px; }
+    }
+
+    @media (max-width: 600px) {
+      .hero-3d-stage { height: 300px; }
+      .hero-3d-stage.is-3d-hidden { height: 220px; }
+    }
+
+    @media (max-width: 380px) {
+      .hero-3d-stage { height: 265px; }
+      .hero-3d-stage.is-3d-hidden { height: 200px; }
     }
 
     .canvas-3d-wrapper {
@@ -412,7 +428,7 @@
       box-shadow: 0 20px 50px var(--card-shadow);
       overflow: hidden;
       cursor: grab;
-      touch-action: none;
+      touch-action: pan-y;
     }
 
     .canvas-3d-wrapper:active {
@@ -424,25 +440,149 @@
       height: 100% !important;
       display: block;
       outline: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .stage-3d-topbar {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 6;
+      pointer-events: none;
+      gap: 8px;
+    }
+
+    .stage-3d-topbar > * {
+      pointer-events: auto;
     }
 
     .stage-3d-hint {
-      position: absolute;
-      top: 16px;
-      left: 16px;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       padding: 6px 12px;
-      background: rgba(0,0,0,0.55);
+      background: rgba(0,0,0,0.6);
       backdrop-filter: blur(8px);
       color: #fff;
-      font-size: 0.75rem;
+      font-size: 0.74rem;
       font-weight: 700;
       border-radius: 20px;
-      pointer-events: none;
       border: 1px solid rgba(255,255,255,0.15);
       letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .btn-toggle-3d {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: rgba(26,26,46,0.78);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 0.74rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+      white-space: nowrap;
+    }
+
+    .btn-toggle-3d:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(108,99,255,0.45);
+    }
+
+    .btn-toggle-3d svg {
+      flex-shrink: 0;
+    }
+
+    /* Fallback 2D card when 3D is disabled */
+    .stage-3d-fallback {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      z-index: 4;
+      background: radial-gradient(circle at center, rgba(108,99,255,0.15) 0%, rgba(26,26,46,0.5) 75%, transparent 100%);
+      animation: fadeInFallback 0.3s ease-out;
+    }
+
+    @keyframes fadeInFallback {
+      from { opacity: 0; transform: scale(0.97); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    .fallback-glow-badge {
+      position: relative;
+      width: 68px;
+      height: 68px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .fallback-core-pulse {
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(108,99,255,0.65) 0%, transparent 70%);
+      animation: corePulseAnim 2.8s infinite ease-in-out;
+    }
+
+    @keyframes corePulseAnim {
+      0%, 100% { transform: scale(0.92); opacity: 0.45; }
+      50% { transform: scale(1.15); opacity: 0.95; }
+    }
+
+    .fallback-core-img {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(108,99,255,0.55);
+      border: 1px solid rgba(255,255,255,0.25);
+      object-fit: cover;
+    }
+
+    .fallback-content h4 {
+      font-size: 1.02rem;
+      font-weight: 700;
+      margin-bottom: 5px;
+      color: var(--text);
+    }
+
+    .fallback-content p {
+      font-size: 0.78rem;
+      color: var(--gray);
+      max-width: 280px;
+      margin: 0 auto 12px;
+      line-height: 1.35;
+    }
+
+    .fallback-activate-btn {
+      padding: 7px 16px;
+      font-size: 0.8rem;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: none;
+      cursor: pointer;
     }
 
     .stage-3d-controls {
@@ -452,26 +592,28 @@
       transform: translateX(-50%);
       display: flex;
       align-items: center;
-      gap: 8px;
-      background: rgba(255,255,255,0.7);
+      gap: 6px;
+      background: rgba(255,255,255,0.75);
       backdrop-filter: blur(12px);
       padding: 6px;
       border-radius: 30px;
       border: 1px solid var(--border);
       box-shadow: 0 8px 24px rgba(0,0,0,0.1);
       z-index: 5;
+      max-width: 94%;
+      overflow-x: auto;
     }
 
     [data-theme="dark"] .stage-3d-controls {
-      background: rgba(26,26,46,0.75);
+      background: rgba(26,26,46,0.85);
     }
 
     .ctrl-3d-btn {
       border: none;
       background: transparent;
-      padding: 6px 14px;
+      padding: 6px 12px;
       border-radius: 20px;
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 700;
       color: var(--text);
       cursor: pointer;
@@ -484,6 +626,16 @@
       background: var(--primary);
       color: #fff;
       box-shadow: 0 2px 10px rgba(108,99,255,0.3);
+    }
+
+    .ctrl-3d-btn.ctrl-toggle-hide {
+      color: var(--secondary);
+    }
+
+    .ctrl-3d-btn.ctrl-toggle-hide:hover {
+      background: var(--secondary);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(255,101,132,0.35);
     }
 
     .btn-outline {
@@ -2957,20 +3109,50 @@
       <div class="hero-3d-stage reveal">
         <div class="canvas-3d-wrapper" id="canvas-3d-wrapper">
           <canvas id="webgl-canvas"></canvas>
+
+          <!-- TOP BAR: Status & Toggle button -->
+          <div class="stage-3d-topbar">
+            <div class="stage-3d-hint">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v8M8 12h8"></path></svg>
+              <span>Интерактивное 3D-ядро</span>
+            </div>
+            <button type="button" class="btn-toggle-3d" id="btn-toggle-3d" onclick="toggle3DVisibility()" title="Скрыть/показать 3D графику для ускорения на мобильных устройствах">
+              <svg class="icon-hide-3d" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+              <svg class="icon-show-3d" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <span class="toggle-3d-label">Скрыть 3D</span>
+            </button>
+          </div>
+
+          <!-- FALLBACK 2D CARD (when 3D is hidden) -->
+          <div class="stage-3d-fallback" id="stage-3d-fallback" style="display: none;">
+            <div class="fallback-glow-badge">
+              <div class="fallback-core-pulse"></div>
+              <img src="assets/logo-mark.jpg" alt="NEOCORE Core" class="fallback-core-img" />
+            </div>
+            <div class="fallback-content">
+              <h4>3D-графика отключена</h4>
+              <p>Включен легкий 2D-режим: максимальная плавность интерфейса и 0% нагрузки на процессор телефона.</p>
+              <button type="button" class="btn btn-primary btn-sm fallback-activate-btn" onclick="toggle3DVisibility()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                Включить 3D сцену
+              </button>
+            </div>
+          </div>
+
+          <!-- COMBO HUD -->
           <div class="stage-3d-combo" id="stage-3d-combo" title="Кликайте по 3D модели для разгона!">
             <span class="combo-label">RPM</span>
             <span class="combo-val" id="combo-rpm">1200</span>
             <span class="combo-mult" id="combo-mult">x1</span>
           </div>
-          <div class="stage-3d-hint">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v8M8 12h8"></path></svg>
-            <span>Кликайте для разгона или тяните</span>
-          </div>
+
+          <!-- BOTTOM CONTROLS -->
           <div class="stage-3d-controls">
             <button type="button" class="ctrl-3d-btn active" onclick="switch3DShape('crystal', this)">Кристалл</button>
             <button type="button" class="ctrl-3d-btn" onclick="switch3DShape('torus', this)">Тор-узел</button>
             <button type="button" class="ctrl-3d-btn" onclick="switch3DShape('sphere', this)">Сфера</button>
             <button type="button" class="ctrl-3d-btn" id="wireframe-toggle-btn" onclick="toggle3DWireframe(this)" title="Включить/выключить сетку">Сетка</button>
+            <button type="button" class="ctrl-3d-btn ctrl-toggle-hide" onclick="toggle3DVisibility()" title="Скрыть 3D модель">Скрыть</button>
           </div>
         </div>
       </div>
@@ -5365,27 +5547,120 @@
     let comboCount = 0;
     let comboTimer = null;
     let spinSpeedBoost = 0;
+    let is3DVisible = true;
+    let animFrame3DId = null;
+    let clock3D = null;
+    let isHeroInView = true;
+
+    function update3DViewport() {
+      const container = document.getElementById('canvas-3d-wrapper');
+      if (!container || !renderer3D || !camera3D || !main3DGroup) return;
+
+      const w = container.clientWidth || 300;
+      const h = container.clientHeight || 300;
+      const aspect = w / h;
+      camera3D.aspect = aspect;
+
+      // Auto-fit responsive camera distance and scale:
+      // When screen is narrow portrait (aspect < 1.0), adjust camera distance and
+      // scale group so the entire 3D crystal, both orbital rings, and particles fit perfectly!
+      if (aspect < 1.0) {
+        camera3D.position.z = 6.2 + (1.0 - aspect) * 2.8;
+        main3DGroup.scale.set(0.82, 0.82, 0.82);
+      } else {
+        camera3D.position.z = 6.2;
+        main3DGroup.scale.set(1.0, 1.0, 1.0);
+      }
+
+      camera3D.updateProjectionMatrix();
+      renderer3D.setSize(w, h);
+
+      // Mobile GPU power optimization: limit pixelRatio to 1.25 on mobile to eliminate lag
+      const isMobile = window.innerWidth <= 768;
+      renderer3D.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 1.25) : Math.min(window.devicePixelRatio, 2.0));
+    }
+
+    function toggle3DVisibility() {
+      is3DVisible = !is3DVisible;
+      apply3DVisibility();
+      try {
+        localStorage.setItem('neocore_3d_state', is3DVisible ? 'visible' : 'hidden');
+      } catch (e) {}
+      if (typeof playUiSound === 'function') playUiSound('toggle');
+      if (typeof showToast === 'function') {
+        showToast(is3DVisible ? '3D-сцена активирована' : '3D-графика скрыта (0% нагрузки на GPU)', 'info');
+      }
+    }
+
+    function apply3DVisibility() {
+      const stage = document.querySelector('.hero-3d-stage');
+      const canvas = document.getElementById('webgl-canvas');
+      const fallback = document.getElementById('stage-3d-fallback');
+      const comboHud = document.getElementById('stage-3d-combo');
+      const controls = document.querySelector('.stage-3d-controls');
+      const toggleLabel = document.querySelector('.toggle-3d-label');
+      const iconHide = document.querySelector('.icon-hide-3d');
+      const iconShow = document.querySelector('.icon-show-3d');
+      const ctrlHideBtn = document.querySelector('.ctrl-3d-btn.ctrl-toggle-hide');
+
+      if (!canvas || !fallback) return;
+
+      if (is3DVisible) {
+        stage?.classList.remove('is-3d-hidden');
+        canvas.style.display = 'block';
+        fallback.style.display = 'none';
+        if (comboHud) comboHud.style.display = '';
+        if (controls) controls.style.display = 'flex';
+        if (toggleLabel) toggleLabel.textContent = 'Скрыть 3D';
+        if (ctrlHideBtn) ctrlHideBtn.textContent = 'Скрыть';
+        if (iconHide) iconHide.style.display = 'inline-block';
+        if (iconShow) iconShow.style.display = 'none';
+
+        // Re-fit canvas dimensions and resume render loop
+        update3DViewport();
+        if (!animFrame3DId) {
+          animate3D();
+        }
+      } else {
+        stage?.classList.add('is-3d-hidden');
+        canvas.style.display = 'none';
+        fallback.style.display = 'flex';
+        if (comboHud) comboHud.style.display = 'none';
+        if (controls) controls.style.display = 'none';
+        if (toggleLabel) toggleLabel.textContent = 'Показать 3D';
+        if (ctrlHideBtn) ctrlHideBtn.textContent = 'Показать';
+        if (iconHide) iconHide.style.display = 'none';
+        if (iconShow) iconShow.style.display = 'inline-block';
+
+        // Cancel requestAnimationFrame to drop CPU and GPU usage to 0!
+        if (animFrame3DId) {
+          cancelAnimationFrame(animFrame3DId);
+          animFrame3DId = null;
+        }
+      }
+    }
 
     function init3DHeroStage() {
       const container = document.getElementById('canvas-3d-wrapper');
       const canvas = document.getElementById('webgl-canvas');
       if (!container || !canvas || typeof THREE === 'undefined') return;
 
-      const width = container.clientWidth;
-      const height = container.clientHeight;
+      const width = container.clientWidth || 300;
+      const height = container.clientHeight || 300;
 
       scene3D = new THREE.Scene();
       camera3D = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
       camera3D.position.z = 6.2;
 
+      const isMobile = window.innerWidth <= 768;
       renderer3D = new THREE.WebGLRenderer({
         canvas: canvas,
         alpha: true,
-        antialias: true,
+        antialias: !isMobile,
         powerPreference: 'high-performance'
       });
       renderer3D.setSize(width, height);
-      renderer3D.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer3D.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 1.25) : Math.min(window.devicePixelRatio, 2));
 
       main3DGroup = new THREE.Group();
       scene3D.add(main3DGroup);
@@ -5415,8 +5690,8 @@
       outerRing2.rotation.y = Math.PI / 4;
       main3DGroup.add(outerRing2);
 
-      // Orbital Particle Cloud
-      const pCount = 140;
+      // Orbital Particle Cloud (adaptive count for mobile)
+      const pCount = isMobile ? 65 : 140;
       const pPos = new Float32Array(pCount * 3);
       for (let i = 0; i < pCount; i++) {
         const u = Math.random();
@@ -5451,23 +5726,36 @@
       pointLight2.position.set(-4, -3, 3);
       scene3D.add(pointLight2);
 
-      // Interactions: Drag Orbit & Click
+      // Responsive Camera & Scale auto-fit
+      update3DViewport();
+
+      // Interactions: Drag Orbit & Click (with mobile swipe-scroll support)
       let isDragging = false;
       let prevMouseX = 0, prevMouseY = 0;
       let dragDistance = 0;
+      let isTouchScrolling = false;
 
       container.addEventListener('pointerdown', e => {
         isDragging = true;
+        isTouchScrolling = false;
         prevMouseX = e.clientX;
         prevMouseY = e.clientY;
         dragDistance = 0;
       });
 
       window.addEventListener('pointermove', e => {
-        if (!isDragging) return;
+        if (!isDragging || isTouchScrolling) return;
         const deltaX = e.clientX - prevMouseX;
         const deltaY = e.clientY - prevMouseY;
         dragDistance += Math.abs(deltaX) + Math.abs(deltaY);
+
+        // If touch gesture is predominantly vertical, let native browser scroll
+        if (e.pointerType === 'touch' && Math.abs(deltaY) > Math.abs(deltaX) * 1.4 && dragDistance > 8) {
+          isTouchScrolling = true;
+          isDragging = false;
+          return;
+        }
+
         targetRotY += deltaX * 0.008;
         targetRotX += deltaY * 0.008;
         prevMouseX = e.clientX;
@@ -5475,15 +5763,16 @@
       });
 
       window.addEventListener('pointerup', () => {
-        if (isDragging && dragDistance < 6) {
+        if (isDragging && dragDistance < 8 && !isTouchScrolling) {
           trigger3DImpulse();
         }
         isDragging = false;
+        isTouchScrolling = false;
       });
 
-      // Parallax mouse follow on Hero
+      // Parallax mouse follow on Hero (desktop only)
       const heroSec = document.getElementById('hero');
-      if (heroSec) {
+      if (heroSec && !isMobile) {
         heroSec.addEventListener('mousemove', e => {
           if (isDragging) return;
           const rect = heroSec.getBoundingClientRect();
@@ -5494,54 +5783,96 @@
         });
       }
 
-      // Resize handler
-      window.addEventListener('resize', () => {
-        if (!container || !renderer3D || !camera3D) return;
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        camera3D.aspect = w / h;
-        camera3D.updateProjectionMatrix();
-        renderer3D.setSize(w, h);
-      });
+      // Responsive Resize handler
+      window.addEventListener('resize', update3DViewport);
 
-      // Animation loop
-      let clock = new THREE.Clock();
-      function animate3D() {
-        requestAnimationFrame(animate3D);
-        const elapsed = clock.getElapsedTime();
+      // IntersectionObserver: automatically pause 3D render loop when hero is off-screen
+      if ('IntersectionObserver' in window) {
+        const stageObserver = new IntersectionObserver(entries => {
+          entries.forEach(entry => {
+            isHeroInView = entry.isIntersecting;
+            if (isHeroInView && is3DVisible && !animFrame3DId) {
+              animate3D();
+            } else if (!isHeroInView && animFrame3DId) {
+              cancelAnimationFrame(animFrame3DId);
+              animFrame3DId = null;
+            }
+          });
+        }, { threshold: 0.05 });
+        stageObserver.observe(container);
+      }
 
-        // Smooth damping
-        currentRotX += (targetRotX - currentRotX) * 0.06;
-        currentRotY += (targetRotY - currentRotY) * 0.06;
+      // Check saved visibility state from localStorage
+      try {
+        const savedState = localStorage.getItem('neocore_3d_state');
+        if (savedState === 'hidden') {
+          is3DVisible = false;
+          apply3DVisibility();
+        }
+      } catch (e) {}
 
-        spinSpeedBoost *= 0.96;
+      // Start animation loop if visible
+      if (is3DVisible) {
+        animate3D();
+      }
+    }
+
+    function animate3D() {
+      if (!is3DVisible || !isHeroInView) {
+        animFrame3DId = null;
+        return;
+      }
+      animFrame3DId = requestAnimationFrame(animate3D);
+
+      if (!clock3D) clock3D = new THREE.Clock();
+      const elapsed = clock3D.getElapsedTime();
+
+      // Smooth damping
+      currentRotX += (targetRotX - currentRotX) * 0.06;
+      currentRotY += (targetRotY - currentRotY) * 0.06;
+
+      spinSpeedBoost *= 0.96;
+      if (main3DGroup) {
         main3DGroup.rotation.x = currentRotX;
         main3DGroup.rotation.y = currentRotY + elapsed * 0.18 + spinSpeedBoost;
+      }
 
-        // Auto spin orbital rings
+      // Auto spin orbital rings
+      if (outerRing1) {
         outerRing1.rotation.z = elapsed * 0.4 + spinSpeedBoost * 0.5;
         outerRing1.rotation.y = elapsed * 0.25;
+      }
+      if (outerRing2) {
         outerRing2.rotation.x = -elapsed * 0.35;
         outerRing2.rotation.z = elapsed * 0.2 + spinSpeedBoost * 0.3;
+      }
+      if (particleCloud3D) {
         particleCloud3D.rotation.y = elapsed * 0.08 + spinSpeedBoost * 0.2;
+      }
 
-        // Pulse scale animation
-        if (pulseScale > 1.001) {
-          pulseScale += (1 - pulseScale) * 0.08;
-        } else {
-          pulseScale = 1;
-        }
+      // Pulse scale animation
+      if (pulseScale > 1.001) {
+        pulseScale += (1 - pulseScale) * 0.08;
+      } else {
+        pulseScale = 1;
+      }
+      if (coreMesh3D) {
         coreMesh3D.scale.set(pulseScale, pulseScale, pulseScale);
+      }
 
-        // Orbiting lights
+      // Orbiting lights
+      if (pointLight1) {
         pointLight1.position.x = Math.sin(elapsed * 0.8) * 5;
         pointLight1.position.z = Math.cos(elapsed * 0.8) * 5;
+      }
+      if (pointLight2) {
         pointLight2.position.x = Math.cos(elapsed * 0.6) * 5;
         pointLight2.position.y = Math.sin(elapsed * 0.6) * 4;
+      }
 
+      if (renderer3D && scene3D && camera3D) {
         renderer3D.render(scene3D, camera3D);
       }
-      animate3D();
     }
 
     function trigger3DImpulse() {
@@ -5582,7 +5913,7 @@
     function switch3DShape(shape, btn) {
       if (!coreMesh3D) return;
       playUiSound('click');
-      document.querySelectorAll('.ctrl-3d-btn:not(#wireframe-toggle-btn)').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.ctrl-3d-btn:not(#wireframe-toggle-btn):not(.ctrl-toggle-hide)').forEach(b => b.classList.remove('active'));
       if (btn) btn.classList.add('active');
       current3DShape = shape;
 
