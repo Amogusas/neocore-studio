@@ -3875,10 +3875,10 @@
 
         <div class="footer-col">
           <h4>Юридическая инфо</h4>
+          <a href="javascript:void(0)" onclick="openTermsModal()">Публичная оферта</a>
+          <a href="javascript:void(0)" onclick="openPaymentTermsModal()">Условия оплаты и возврат</a>
           <a href="javascript:void(0)" onclick="openPrivacyModal()">Политика конфиденциальности</a>
           <a href="javascript:void(0)" onclick="openPrivacyModal()">Согласие на обработку (152-ФЗ)</a>
-          <a href="javascript:void(0)" onclick="showToast('Стандартный NDA подписывается до начала брифа', 'info')">Договор и NDA</a>
-          <a href="javascript:void(0)" onclick="showToast('Все платежи проводятся с выдачей электронных чеков', 'info')">Порядок оплаты</a>
         </div>
       </div>
 
@@ -4292,6 +4292,36 @@
       if (e && e.target !== e.currentTarget) return;
       playUiSound('click');
       const backdrop = document.getElementById('privacy-modal-backdrop');
+      if (backdrop) backdrop.classList.remove('open');
+    }
+
+    // 6.1 Terms of Service Modal (Public Offer)
+    function openTermsModal(e) {
+      if (e) e.preventDefault();
+      playUiSound('pop');
+      const backdrop = document.getElementById('terms-modal-backdrop');
+      if (backdrop) backdrop.classList.add('open');
+    }
+
+    function closeTermsModal(e) {
+      if (e && e.target !== e.currentTarget) return;
+      playUiSound('click');
+      const backdrop = document.getElementById('terms-modal-backdrop');
+      if (backdrop) backdrop.classList.remove('open');
+    }
+
+    // 6.2 Payment & Refund Policy Modal
+    function openPaymentTermsModal(e) {
+      if (e) e.preventDefault();
+      playUiSound('pop');
+      const backdrop = document.getElementById('payment-terms-modal-backdrop');
+      if (backdrop) backdrop.classList.add('open');
+    }
+
+    function closePaymentTermsModal(e) {
+      if (e && e.target !== e.currentTarget) return;
+      playUiSound('click');
+      const backdrop = document.getElementById('payment-terms-modal-backdrop');
       if (backdrop) backdrop.classList.remove('open');
     }
 
@@ -6710,6 +6740,100 @@
 
       <div style="margin-top:24px;">
         <button type="button" class="btn btn-primary" onclick="closePrivacyModal()">
+          Понятно и согласен
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════
+       PUBLIC OFFER MODAL (ПУБЛИЧНАЯ ОФЕРТА)
+       ════════════════════════════════════ -->
+  <div class="site-modal-backdrop" id="terms-modal-backdrop" onclick="closeTermsModal(event)">
+    <div class="site-modal" onclick="event.stopPropagation()">
+      <button class="modal-close-btn" onclick="closeTermsModal()" title="Закрыть">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+      <span class="modal-badge">Юридический документ</span>
+      <h3 class="modal-title">Публичная оферта на оказание услуг</h3>
+
+      <div class="privacy-content" style="margin-top:16px;">
+        <p>Настоящий документ является официальным предложением (публичной офертой) цифровой студии <strong>NEOCORE Studio</strong> (далее — Исполнитель) и определяет условия оказания услуг по проектированию, дизайну, программной разработке сайтов, 3D WebGL графики и автоматизации для любого физического или юридического лица (далее — Заказчик).</p>
+
+        <h4>1. Предмет оферты</h4>
+        <p>1.1. Исполнитель обязуется по заданию Заказчика оказать комплекс услуг по разработке интернет-сайтов (Landing Page, корпоративные платформы, каталоги), 3D WebGL интерактивных модулей, интеграции онлайн-калькуляторов и Telegram-сервисов, а Заказчик обязуется принять и оплатить оказанные услуги в соответствии с согласованной сметой и выбранным тарифом.</p>
+        <p>1.2. Конкретные технические требования, состав модулей и сроки согласовываются сторонами на основании интерактивного брифа, сметы либо переписки в официальном Telegram-канале студии (@neocore_studio).</p>
+
+        <h4>2. Порядок акцепта оферты</h4>
+        <p>2.1. Полным и безоговорочным акцептом условий настоящей публичной оферты признается совершение Заказчиком любого из следующих конклюдентных действий: отправка брифа через сайт, утверждение сметы либо перечисление авансового платежа за этап разработки.</p>
+        <p>2.2. С момента совершения акцепта договор на оказание услуг между Исполнителем и Заказчиком считается заключенным в надлежащей юридической форме в соответствии со ст. 434 и 438 Гражданского кодекса РФ.</p>
+
+        <h4>3. Порядок выполнения и сдачи-приемки работ</h4>
+        <p>3.1. Разработка ведется поэтапно: проектирование прототипа, создание дизайн-макетов и 3D-сцен, верстка и интеграция логики, финишное тестирование на сервере Исполнителя.</p>
+        <p>3.2. Промежуточная и финальная демонстрация функционирования проекта осуществляется на защищенном тестовом стенде Исполнителя.</p>
+        <p>3.3. После демонстрации Заказчик в течение 3 (трех) рабочих дней производит приемку либо направляет перечень мотивированных замечаний в рамках согласованного ТЗ. При отсутствии мотивированных претензий в указанный срок работы признаются выполненными в полном объеме и надлежащем качестве.</p>
+
+        <h4>4. Интеллектуальные права</h4>
+        <p>4.1. Все исключительные права на уникальный дизайн, 3D-графику и исходный программный код, созданные в рамках реализации проекта, переходят к Заказчику в полном объеме с момента проведения окончательного расчета.</p>
+        <p>4.2. Исполнитель сохраняет за собой право демонстрации визуальных материалов проекта в портфолио студии, если иное не оговорено в персональном соглашении о конфиденциальности (NDA).</p>
+
+        <h4>5. Контакты и реквизиты Исполнителя</h4>
+        <p>Email для официальных обращений: <a href="mailto:stupapupa228777@gmail.com" style="color:var(--primary);">stupapupa228777@gmail.com</a><br>
+        Telegram: <a href="https://t.me/neocore_studio" target="_blank" rel="noopener noreferrer" style="color:var(--primary);">@neocore_studio</a></p>
+      </div>
+
+      <div style="margin-top:24px;">
+        <button type="button" class="btn btn-primary" onclick="closeTermsModal()">
+          Понятно и согласен
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════
+       PAYMENT & REFUND TERMS MODAL (УСЛОВИЯ ОПЛАТЫ И ВОЗВРАТА)
+       ════════════════════════════════════ -->
+  <div class="site-modal-backdrop" id="payment-terms-modal-backdrop" onclick="closePaymentTermsModal(event)">
+    <div class="site-modal" onclick="event.stopPropagation()">
+      <button class="modal-close-btn" onclick="closePaymentTermsModal()" title="Закрыть">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+      <span class="modal-badge">Финансовые расчеты</span>
+      <h3 class="modal-title">Условия оплаты и политика возврата средств</h3>
+
+      <div class="privacy-content" style="margin-top:16px;">
+        <p>Настоящие правила определяют порядок проведения платежей, доступные финансовые инструменты, меры безопасности и условия возврата денежных средств при заказе услуг в веб-студии <strong>NEOCORE Studio</strong>.</p>
+
+        <h4>1. Доступные способы оплаты</h4>
+        <p>Оплата услуг осуществляется через авторизованный защищенный платежный шлюз следующими способами:</p>
+        <ul style="padding-left:20px;margin-bottom:14px;color:var(--text);font-size:0.9rem;line-height:1.6;">
+          <li style="margin-bottom:6px;"><strong>Система быстрых платежей (СБП)</strong> — мгновенная оплата по динамическому QR-коду или платежной ссылке через мобильное приложение любого банка РФ;</li>
+          <li style="margin-bottom:6px;"><strong>Банковские карты</strong> — МИР, Visa, Mastercard через сертифицированный эквайринг с обязательным протоколом 3D-Secure;</li>
+          <li style="margin-bottom:6px;"><strong>Криптовалюты и Telegram-транзакции</strong> — USDT (TRC-20, TON, BEP-20), TON, а также быстрые переводы через платежные боты CryptoBot и xRocket.</li>
+        </ul>
+
+        <h4>2. Порядок расчетов</h4>
+        <p>2.1. Оплата услуг студии производится в российских рублях или эквиваленте на условиях поэтапного финансирования: базовый аванс (предоплата) составляет 50% от согласованной стоимости этапа. Финальная оплата (50%) вносится после успешной демонстрации и утверждения результата на тестовом сервере до передачи финальных исходных файлов Заказчику.</p>
+        <p>2.2. Обязательство по оплате считается исполненным с момента успешного подтверждения транзакции платежным шлюзом процессинга.</p>
+
+        <h4>3. Безопасность платежей и протоколы защиты</h4>
+        <p>3.1. Все платежные сессии защищены сквозным криптографическим шифрованием данных по протоколу TLS 1.3 / SSL с длиной ключа 256 бит.</p>
+        <p>3.2. Студия NEOCORE не хранит, не собирает и не имеет прямого доступа к конфиденциальным реквизитам банковских карт или счетов клиентов. Весь процесс авторизации проводится в защищенном контуре платежного провайдера.</p>
+
+        <h4>4. Политика возврата денежных средств (Refund Policy)</h4>
+        <p>4.1. <strong>Возврат до старта работ</strong>: Если Заказчик принимает решение расторгнуть соглашение до момента фактического начала выполнения проектных работ Исполнителем, сумма предоплаты подлежит возврату в объеме 100% за вычетом фактической комиссии платежного шлюза за обработку перевода.</p>
+        <p>4.2. <strong>Возврат при частичном выполнении</strong>: В случае досрочного расторжения договора в процессе реализации сумма к возврату рассчитывается как разница между внесенным авансом и стоимостью фактически выполненного объема работ и понесенных Исполнителем накладных расходов.</p>
+        <p>4.3. <strong>Порядок подачи заявления</strong>: Заявление о возврате средств направляется в свободной форме на адрес электронной почты <a href="mailto:stupapupa228777@gmail.com" style="color:var(--primary);">stupapupa228777@gmail.com</a> с указанием даты транзакции, суммы и номера заказа/брифа.</p>
+        <p>4.4. <strong>Сроки обработки и перечисления</strong>: Заявление рассматривается финансовым отделом в течение 3 (трех) рабочих дней. Возврат денежных средств осуществляется тем же платежным методом и на те же реквизиты, с которых была произведена оплата, в срок от 1 до 10 банковских дней (согласно регламенту банка-эмитента карты Заказчика).</p>
+
+        <h4>5. Служба клиентской поддержки</h4>
+        <p>По всем вопросам проведения оплат, проверки статуса транзакций и возвратов:<br>
+        Email: <a href="mailto:stupapupa228777@gmail.com" style="color:var(--primary);">stupapupa228777@gmail.com</a><br>
+        Telegram: <a href="https://t.me/neocore_studio" target="_blank" rel="noopener noreferrer" style="color:var(--primary);">@neocore_studio</a></p>
+      </div>
+
+      <div style="margin-top:24px;">
+        <button type="button" class="btn btn-primary" onclick="closePaymentTermsModal()">
           Понятно и согласен
         </button>
       </div>
